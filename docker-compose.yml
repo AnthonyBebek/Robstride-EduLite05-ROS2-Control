@@ -1,0 +1,35 @@
+version: "3.8"
+
+services:
+  ros:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: carmy_ros
+    user: root
+    # Privileged is still good for hardware/UI, but network_mode handles the CAN bus
+    privileged: true
+    network_mode: "host"
+    environment:
+      - DISPLAY=${DISPLAY}
+    volumes:
+      - ./carmy_motor_controller:/ws/carmy_motor_controller:rw
+      - /tmp/.X11-unix:/tmp/.X11-unix
+      - ros_build:/ws/carmy_motor_controller/build
+      - ros_install:/ws/carmy_motor_controller/install
+    working_dir: /ws/carmy_motor_controller
+    # On start: source ROS, build the active package, check for host can0, and drop to shell
+    command: >
+      bash -lc "source /opt/ros/humble/setup.bash && cd /ws/carmy_motor_controller && \
+      colcon build --event-handlers console_direct+ || { echo 'colcon build failed — opening shell for debugging'; exec bash; } && \
+      if ip link show can0 > /dev/null 2>&1; then \
+        echo 'Native SocketCAN interface (can0) detected successfully!'; \
+      else \
+        echo 'Warning: can0 interface not detected. Did you run your host startup script?'; \
+      fi && \
+      if [ -f install/setup.bash ]; then source install/setup.bash; else echo 'install/setup.bash not found'; fi && exec bash"
+    tty: true
+
+volumes:
+  ros_build:
+  ros_install:
