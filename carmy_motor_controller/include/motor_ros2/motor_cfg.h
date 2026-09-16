@@ -139,7 +139,7 @@ static const std::map<ActuatorType, ActuatorOperation>
          }},
         {ActuatorType::ROBSTRIDE_04,
          {
-             4 * M_PI,
+             18.20 * M_PI, // 16-Bit percision
              15,
              120,
              5000.0,
@@ -147,7 +147,7 @@ static const std::map<ActuatorType, ActuatorOperation>
          }},
         {ActuatorType::ROBSTRIDE_05,
          {
-             4 * M_PI,
+             18.20 * M_PI, // 16-Bit percision  
              33,
              17,
              500.0,
