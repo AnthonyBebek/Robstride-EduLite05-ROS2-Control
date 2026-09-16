@@ -5,6 +5,7 @@
 #include <atomic>
 #include <chrono>
 #include <iostream>
+#include <map>
 #include <memory>
 #include <rclcpp/node.hpp>
 #include <rclcpp/rclcpp.hpp>
@@ -18,14 +19,20 @@ using MotorFeedback = carmy_motor_controller::msg::MotorFeedback;
 
 class MotorControlSample : public rclcpp::Node {
 public:
-  MotorControlSample()
-      : rclcpp::Node("motor_control_set_node"),
-        motor(RobStrideMotor("can0", 0xFF, 0x03, 0)) {
+  MotorControlSample(std::vector<uint8_t>& motor_ids)
+  // Initialize the ROS2 node with the name "motor_control_set_node" and create a RobStrideMotor instance
+      : rclcpp::Node("multi_motor_control_node") {
 
-    motor.Get_RobStrite_Motor_parameter(0x7005);
-    usleep(1000);
-    motor.enable_motor();
-    usleep(1000);
+        for (uint8_t id : motor_ids) {
+          motors_.try_emplace(id, "can0", 0xFF, id, 5);
+        }
+
+        for (auto& [id, motor] : motors_) {
+          motor.Get_RobStrite_Motor_parameter(0x7005);
+          usleep(1000);
+          motor.enable_motor();
+          usleep(1000);
+        }
 
     motion_sub_ = this->create_subscription<MotorMotionControl>(
         "motion_control", 10,
@@ -34,71 +41,82 @@ public:
 
     feedback_pub_ = this->create_publisher<MotorFeedback>("motor_feedback", 10);
 
-    target_position_ = 0.0;
-    target_velocity_ = 0.0;
-    target_kp_ = 1.0;
-    target_kd_ = 0.1;
-    target_torque_ = 0.0;
-
     publish_timer_ = this->create_wall_timer(
         std::chrono::milliseconds(20),
         std::bind(&MotorControlSample::hold_position, this));
   }
 
   ~MotorControlSample() {
-    motor.Disenable_Motor(0);
+    for (auto& [id, motor] : motors_) {
+      motor.Disenable_Motor(0);
+    }
   }
 
   void motion_callback(const MotorMotionControl::SharedPtr msg) {
-    target_position_ = msg->position;
-    target_velocity_ = msg->velocity;
-    target_kp_ = msg->kp;
-    target_kd_ = msg->kd;
-    target_torque_ = msg->torque;
+    auto it = motors_.find(msg->motor_id);
+    if (it == motors_.end()) {
+      RCLCPP_WARN(this->get_logger(), "Motor ID %d not found", msg->motor_id);
+      return;
+    }
 
-    apply_target();
+    target_position_[msg->motor_id] = msg->position;
+    target_velocity_[msg->motor_id] = msg->velocity;
+    target_kp_[msg->motor_id] = msg->kp;
+    target_kd_[msg->motor_id] = msg->kd;
+    target_torque_[msg->motor_id] = msg->torque;
+
+    apply_target(msg->motor_id);
 
     RCLCPP_INFO(this->get_logger(),
-                "motion cmd: pos=%.3f vel=%.3f kp=%.3f kd=%.3f torque=%.3f",
-                target_position_, target_velocity_, target_kp_, target_kd_,
-                target_torque_);
+                "motion cmd (motor %d): pos=%.3f vel=%.3f kp=%.3f kd=%.3f torque=%.3f",
+                msg->motor_id, msg->position, msg->velocity, msg->kp, msg->kd,
+                msg->torque);
   }
 
-  void apply_target() {
-    auto [position_feedback, velocity_feedback, torque, temperature] =
-        motor.send_motion_command(target_torque_, target_position_,
-                                 target_velocity_, target_kp_, target_kd_);
+  void apply_target(uint8_t motor_id) {
+    auto it = motors_.find(motor_id);
+    if (it == motors_.end()) return;
 
-    last_feedback_.position = position_feedback;
-    last_feedback_.velocity = velocity_feedback;
-    last_feedback_.torque = torque;
-    last_feedback_.temperature = temperature;
+    auto [position_feedback, velocity_feedback, torque, temperature] =
+        it->second.send_motion_command(target_torque_[motor_id], target_position_[motor_id],
+                                       target_velocity_[motor_id], target_kp_[motor_id], target_kd_[motor_id]);
+
+    last_feedback_[motor_id].position = position_feedback;
+    last_feedback_[motor_id].velocity = velocity_feedback;
+    last_feedback_[motor_id].torque = torque;
+    last_feedback_[motor_id].temperature = temperature;
   }
 
   void hold_position() {
-    apply_target();
+    for (auto& [motor_id, motor] : motors_) {
+      apply_target(motor_id);
+    }
     publish_feedback();
   }
 
   void publish_feedback() {
-    auto feedback = MotorFeedback();
+    for (auto& [motor_id, motor] : motors_) {
+      auto feedback = MotorFeedback();
+      feedback.motor_id = motor_id;
 
-    try {
-      motor.receive_status_frame();
-    } catch (const std::exception &e) {
-      RCLCPP_WARN(this->get_logger(), "feedback read failed: %s", e.what());
-    }
+      try {
+        motor.receive_status_frame();
+      } catch (const std::exception &e) {
+        RCLCPP_WARN(this->get_logger(), "feedback read failed for motor %d: %s", motor_id, e.what());
+        continue;
+      }
 
-    auto [position_feedback, velocity_feedback, torque, temperature] =
-        motor.return_data_pvtt();
+      auto [position_feedback, velocity_feedback, torque, temperature] =
+          motor.return_data_pvtt();
 
-    feedback.position = position_feedback;
-    feedback.velocity = velocity_feedback;
-    feedback.torque = torque;
-    feedback.temperature = temperature;
+      feedback.position = position_feedback;
+      feedback.velocity = velocity_feedback;
+      feedback.torque = torque;
+      feedback.temperature = temperature;
 
-    if (rclcpp::ok()) {
-      feedback_pub_->publish(feedback);
+      if (rclcpp::ok()) {
+        feedback_pub_->publish(feedback);
+      }
     }
   }
 
@@ -107,26 +125,30 @@ private:
   rclcpp::Publisher<MotorFeedback>::SharedPtr feedback_pub_;
   rclcpp::TimerBase::SharedPtr publish_timer_;
 
-  RobStrideMotor motor;
+  std::map<uint8_t, RobStrideMotor> motors_;
 
-  double target_position_ = 0.0;
-  double target_velocity_ = 0.0;
-  double target_kp_ = 1.0;
-  double target_kd_ = 0.1;
-  double target_torque_ = 0.0;
+  std::map<uint8_t, double> target_position_;
+  std::map<uint8_t, double> target_velocity_;
+  std::map<uint8_t, double> target_kp_;
+  std::map<uint8_t, double> target_kd_;
+  std::map<uint8_t, double> target_torque_;
 
   struct MotionFeedback {
     double position = 0.0;
     double velocity = 0.0;
     double torque = 0.0;
     double temperature = 0.0;
-  } last_feedback_;
+  };
+  std::map<uint8_t, MotionFeedback> last_feedback_;
 };
 
 int main(int argc, char **argv) {
+  std::vector<uint8_t> motor_ids = {0x01, 0x02, 0x03, 0x04};
+
   rclcpp::init(argc, argv);
 
-  auto controller = std::make_shared<MotorControlSample>();
+  auto controller = std::make_shared<MotorControlSample>(motor_ids);
+  
 
   rclcpp::spin(controller);
 

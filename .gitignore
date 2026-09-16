@@ -1,0 +1,41 @@
+# ==============================================================================
+# ROS 2 Build & Log Artifacts
+# ==============================================================================
+# colcon build output directories
+build/
+install/
+log/
+
+# Python compiled files & cache
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+*.egg-info/
+.eggs/
+
+# C++ binaries & compiled object files
+*.o
+*.obj
+*.so
+*.a
+*.dylib
+*.dll
+
+# ROS 2 recording data (rosbag2)
+*.db3
+*.mcap
+rosbag2_*/
+
+# ==============================================================================
+# IDEs & System Files
+# ==============================================================================
+# VS Code
+.vscode/
+
+# JetBrains / CLion
+.idea/
+
+# OS metadata
+.DS_Store
+Thumbs.db

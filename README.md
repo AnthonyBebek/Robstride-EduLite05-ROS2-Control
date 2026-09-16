@@ -54,11 +54,11 @@ ros2 run carmy_motor_controller rs_motor_ros2_node
 ```
 
 ## Example usage
-
+Assuming the motor id is 3, (possible id's are 1,2,3 & 4)
 Publish a target position:
 
 ```bash
-ros2 topic pub /motion_control carmy_motor_controller/msg/MotorMotionControl "{position: 1.57, velocity: 0.0, kp: 10.0, kd: 1.0, torque: 0.0}" -1
+ros2 topic pub /motion_control carmy_motor_controller/msg/MotorMotionControl "{motor_id=3, position: 1.57, velocity: 0.0, kp: 10.0, kd: 1.0, torque: 0.0}" -1
 ```
 
 Read the live feedback:
