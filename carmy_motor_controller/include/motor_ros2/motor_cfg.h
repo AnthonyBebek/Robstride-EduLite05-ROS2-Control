@@ -17,36 +17,40 @@
 #include <unistd.h>
 #include <vector>
 
-#define Set_mode 'j'      // 设置控制模式
-#define Set_parameter 'p' // 设置参数
-// 各种控制模式
-#define move_control_mode 0   // 运控模式
-#define PosPP_control_mode 1  // 位置模式
-#define Speed_control_mode 2  // 速度模式
-#define Elect_control_mode 3  // 电流模式
-#define Set_Zero_mode 4       // 零点模式
-#define PosCSP_control_mode 5 // 位置模式CSP
+#define Set_mode 'j'      
+#define Set_parameter 'p' 
 
-#define SC_MAX 23.0f
-#define SC_MIN 0.0f
-#define SV_MAX 20.0f
-#define SV_MIN -20.0f
-#define SCIQ_MIN -23.0f
+// Control Modes
+#define move_control_mode 0   // Motion Control Mode
+#define PosPP_control_mode 1  // Position Mode (PP)
+#define Speed_control_mode 2  // Speed Mode
+#define Elect_control_mode 3  // Current Mode
+#define Set_Zero_mode 4       // Zero Position Mode
+#define PosCSP_control_mode 5 // Position Mode (CSP)
 
-// 通信地址
-#define Communication_Type_Get_ID 0x00 // 获取设备的ID和64位MCU唯一标识符`
-#define Communication_Type_MotionControl 0x01 // 运控模式用来向主机发送控制指令
-#define Communication_Type_MotorRequest 0x02 // 用来向主机反馈电机运行状态
-#define Communication_Type_MotorEnable 0x03        // 电机使能运行
-#define Communication_Type_MotorStop 0x04          // 电机停止运行
-#define Communication_Type_SetPosZero 0x06         // 设置电机机械零位
-#define Communication_Type_Can_ID 0x07             // 更改当前电机CAN_ID
-#define Communication_Type_Control_Mode 0x12       // 设置电机模式
-#define Communication_Type_GetSingleParameter 0x11 // 读取单个参数
-#define Communication_Type_SetSingleParameter 0x12 // 设定单个参数
-#define Communication_Type_ErrorFeedback 0x15      // 故障反馈帧
+#define SC_MAX 23.0f          // Maximum current for the motor
+#define SC_MIN 0.0f           // Minimum current for the motor
+#define SV_MAX 20.0f          // Maximum speed for the motor
+#define SV_MIN -20.0f         // Minimum speed for the motor
+#define SCIQ_MIN -23.0f       // Minimum current for the motor
 
-// 定义返回类型（需要 C++17）
+// Communication Types
+// -----------------------------
+// This data is put within the can header to indicate the 
+// instruction you want to send to the motor
+// -----------------------------
+#define Communication_Type_Get_ID 0x00             // Get the ID of the motor
+#define Communication_Type_MotionControl 0x01      // Send motion control commands to the motor
+#define Communication_Type_MotorRequest 0x02       // Request motor data (position, velocity, torque, temperature)
+#define Communication_Type_MotorEnable 0x03        // Enable the motor
+#define Communication_Type_MotorStop 0x04          // Stop the motor
+#define Communication_Type_SetPosZero 0x06         // Set the current position as the zero position
+#define Communication_Type_Can_ID 0x07             // Set the CAN ID of the motor
+#define Communication_Type_Control_Mode 0x12       // Set the control mode of the motor (motion control, position control, speed control, current control, zero position)
+#define Communication_Type_GetSingleParameter 0x11 // Get a single parameter from the motor
+#define Communication_Type_SetSingleParameter 0x12 // Set a single parameter on the motor
+#define Communication_Type_ErrorFeedback 0x15      // Get error feedback from the motor
+
 using ReceiveResult =
     std::optional<std::tuple<uint8_t, uint16_t, uint8_t, std::vector<uint8_t>>>;
 
@@ -77,7 +81,7 @@ public:
 };
 
 //---------------------------------------------
-// 电机类型定义
+// Motor types enumeration
 //---------------------------------------------
 enum class ActuatorType {
   ROBSTRIDE_00 = 0,
@@ -90,7 +94,7 @@ enum class ActuatorType {
 };
 
 //---------------------------------------------
-// 电机运行参数结构体
+// Motor operation parameters structure
 //---------------------------------------------
 struct ActuatorOperation {
   double position; // rad
@@ -101,8 +105,14 @@ struct ActuatorOperation {
 };
 
 //---------------------------------------------
-// 电机类型对应运行参数映射
+// Mapping of actuator types to their operation parameters
 //---------------------------------------------
+// position(rad)
+// velocity(rad/s)
+// torque(Nm)
+// kp (proportional gain)
+// kd (derivative gain)
+//--------------------------------------------
 static const std::map<ActuatorType, ActuatorOperation>
     ACTUATOR_OPERATION_MAPPING = {
         {ActuatorType::ROBSTRIDE_00,
@@ -166,8 +176,10 @@ static const std::map<ActuatorType, ActuatorOperation>
 static const uint16_t Index_List[] = {0X7005, 0X7006, 0X700A, 0X700B, 0X7010,
                                       0X7011, 0X7014, 0X7016, 0X7017, 0X7018,
                                       0x7019, 0x701A, 0x701B, 0x701C, 0x701D};
-// 18通信类型可以写入的参数列表
-// 参数变量名  参数地址  描述  类型  字节数  单位/说明
+
+
+// List of indices for motor parameters, used for reading and writing motor settings
+// Parameter variable name, address, description, type, size(bytes), unit/notes
 class data_read_write {
 public:
   data_read_write_one

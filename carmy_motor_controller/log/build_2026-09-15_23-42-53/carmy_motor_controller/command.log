@@ -1,4 +1,0 @@
-Invoking command in '/ws/carmy_motor_controller/build/carmy_motor_controller': CMAKE_PREFIX_PATH=/opt/ros/humble /usr/bin/cmake --build /ws/carmy_motor_controller/build/carmy_motor_controller -- -j12 -l12
-Invoked command in '/ws/carmy_motor_controller/build/carmy_motor_controller' returned '0': CMAKE_PREFIX_PATH=/opt/ros/humble /usr/bin/cmake --build /ws/carmy_motor_controller/build/carmy_motor_controller -- -j12 -l12
-Invoking command in '/ws/carmy_motor_controller/build/carmy_motor_controller': CMAKE_PREFIX_PATH=/opt/ros/humble /usr/bin/cmake --install /ws/carmy_motor_controller/build/carmy_motor_controller
-Invoked command in '/ws/carmy_motor_controller/build/carmy_motor_controller' returned '0': CMAKE_PREFIX_PATH=/opt/ros/humble /usr/bin/cmake --install /ws/carmy_motor_controller/build/carmy_motor_controller
